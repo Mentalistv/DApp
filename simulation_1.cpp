@@ -21,6 +21,7 @@ using namespace std;
 #define INITIAL_CREDIBILITY 30
 #define CREDIBILITY_INC_MULTIPLIER 0.05
 #define CREDIBILITY_DEC_MULTIPLIER 0.1
+#define EXPERTISE_MULTIPLIER 0.2
 #define POS_WEIGHT 0.5
 
 enum NodeType{
@@ -156,8 +157,8 @@ int main(int argc, char* argv[]){
 
             // expertise in the topic gets more credibility 
             if(fact_checker->expertise == news_to_be_checked->news_category){
-                voters_result += 20;
-                sum_credibility += 20;
+                voters_result += EXPERTISE_MULTIPLIER * fact_checker->credibility;
+                sum_credibility += EXPERTISE_MULTIPLIER * fact_checker->credibility;
             }
 
             total_fact_checkers_balance += fact_checker->balance;
