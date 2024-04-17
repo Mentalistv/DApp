@@ -13,7 +13,7 @@ using namespace std;
 #define HONEST_NODE_INITIAL_BALANCE 100
 #define MALICIOUS_NODE_INITIAL_BALANCE 15
 
-#define NUMBER_OF_REQUESTS 1000
+#define NUMBER_OF_REQUESTS 2000
 #define FACT_CHECKERS_PERECNTAGE 0.5
 
 #define VERIFICATION_FEES 0.5
@@ -22,7 +22,7 @@ using namespace std;
 #define CREDIBILITY_INC_MULTIPLIER 0.05
 #define CREDIBILITY_DEC_MULTIPLIER 0.1
 #define EXPERTISE_MULTIPLIER 0.2
-#define POS_WEIGHT 0.5
+#define POS_WEIGHT 1
 
 enum NodeType{
     HONEST,
@@ -93,7 +93,7 @@ int main(int argc, char* argv[]){
         string checkers_expertise = expertise[checkers_expertise_index];
 
         if(i < (1-q)*n){
-            if(i < p*n){
+            if(i < (1-q)*p*n){
                 fact_checker = new Node(HONEST, HONEST_NODE_INITIAL_BALANCE, INITIAL_CREDIBILITY, 0.9, checkers_expertise);
             }
             else{
@@ -118,7 +118,7 @@ int main(int argc, char* argv[]){
         int news_category_index = randomNumberGenerator(0, expertise.size());
         string news_category = expertise[news_category_index];
 
-        News* news_to_be_checked = new News(resultUsingProb(0.5, true) ? TRUE : FAKE, news_category, 10);
+        News* news_to_be_checked = new News(resultUsingProb(0.5, true) ? TRUE : FAKE, news_category, VERIFICATION_FEES);
         node[check_requester]->balance -= VERIFICATION_FEES;
 
         // incent for the voters
@@ -203,6 +203,51 @@ int main(int argc, char* argv[]){
     for(int i=0; i<n; i++){
     	std::cout<<"Node "<<i<<" has a creadibility score of "<<node[i]->credibility<<" and a balance of "<<node[i]->balance<<endl;
     }
+
+    double honest_9_avg_balance = 0;
+    double honest_9_avg_credibility = 0;
+
+    double honest_7_avg_balance = 0;
+    double honest_7_avg_credibility = 0;
+
+    double malicious_avg_balance = 0;
+    double malicious_avg_credibility = 0;
+
+
+    for(int i=0; i<n; i++){
+        Node* fact_checker = node[i];
+
+        if(i < (1-q)*n){
+            if(i < (1-q)*p*n){
+                honest_9_avg_balance += fact_checker->balance;
+                honest_9_avg_credibility += fact_checker->credibility;
+            }
+            else{
+                honest_7_avg_balance += fact_checker->balance;
+                honest_7_avg_credibility += fact_checker->credibility;
+            }
+        }
+        else{
+            malicious_avg_balance += fact_checker->balance;
+            malicious_avg_credibility += fact_checker->credibility;
+        }
+    }
+    
+    honest_9_avg_balance /= (1-q)*p*n;
+    honest_9_avg_credibility /= (1-q)*p*n;
+
+    // cout<<q<<" "<<p<<" "<<n<<endl;
+    // cout<<(1-q)*p*n<<endl;
+    
+    honest_7_avg_balance /= (1-q)*(1-p)*n;
+    honest_7_avg_credibility /= (1-q)*(1-p)*n;
+
+    malicious_avg_balance /= q*n; 
+    malicious_avg_credibility /= q*n; 
+
+    cout<<"Honest Nodes with 0.9 prob <===> "<<"avg balance = "<<honest_9_avg_balance<<"\t"<<"avg credibility = "<<honest_9_avg_credibility<<endl;
+    cout<<"Honest Nodes with 0.7 prob <===> "<<"avg balance = "<<honest_7_avg_balance<<"\t"<<"avg credibility = "<<honest_7_avg_credibility<<endl;
+    cout<<"Malicious nodes <===> "<<"avg balance = "<<malicious_avg_balance<<"\t"<<"avg credibility = "<<malicious_avg_credibility<<endl;
 
     return 0;
 }
