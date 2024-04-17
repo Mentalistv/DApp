@@ -3,20 +3,26 @@
 #include <string>
 #include <time.h>
 #include <unordered_set>
+#include <unordered_map>
 #include <random>
 #include <iomanip>
 
 using namespace std;
 
 // SIMULATION PARAMETERS
-#define NUMBER_OF_REQUESTS 1000
-#define AMOUNT_AT_STAKE 0.2
-#define FACT_CHECKERS_PERECNTAGE 0.3
+#define HONEST_NODE_INITIAL_BALANCE 100
+#define MALICIOUS_NODE_INITIAL_BALANCE 15
+
+#define NUMBER_OF_REQUESTS 2000
+#define FACT_CHECKERS_PERECNTAGE 0.5
+
+#define VERIFICATION_FEES 0.5
+#define AMOUNT_AT_STAKE 0.02
+#define INITIAL_CREDIBILITY 30
 #define CREDIBILITY_INC_MULTIPLIER 0.05
 #define CREDIBILITY_DEC_MULTIPLIER 0.1
-#define VERIFICATION_FEES 1
-#define INITIAL_CREDIBILITY 30
-
+#define EXPERTISE_MULTIPLIER 0.2
+#define POS_WEIGHT 1
 
 enum NodeType{
     HONEST,
@@ -30,7 +36,7 @@ enum NewsType{
 
 class Node{
     public:
-    Node(NodeType node_type, double balance, double credibility, double prob, vector <string> expertise){
+    Node(NodeType node_type, double balance, double credibility, double prob, string expertise){
         this->node_type = node_type;
         this->balance = balance;
         this->credibility = credibility;
@@ -42,7 +48,7 @@ class Node{
     double balance;
     double credibility;
     double prob;
-    vector <string> expertise;
+    string expertise;
 };
 
 class News{
@@ -73,6 +79,7 @@ bool resultUsingProb(double prob, bool res){
 
 int main(int argc, char* argv[]){
     vector<Node *> node;
+    vector<string> expertise = {"ML", "Systems", "Theory", "Sports", "Politics"};
     int n;
     double p, q;
 
@@ -82,16 +89,19 @@ int main(int argc, char* argv[]){
 
     for(int i=0; i<n; i++){
         Node* fact_checker;
+        int checkers_expertise_index = randomNumberGenerator(0, expertise.size());
+        string checkers_expertise = expertise[checkers_expertise_index];
+
         if(i < (1-q)*n){
-            if(i < p*n){
-                fact_checker = new Node(HONEST, 100, INITIAL_CREDIBILITY, 0.9, {"fd"});
+            if(i < (1-q)*p*n){
+                fact_checker = new Node(HONEST, HONEST_NODE_INITIAL_BALANCE, INITIAL_CREDIBILITY, 0.9, checkers_expertise);
             }
             else{
-                fact_checker = new Node(HONEST, 100, INITIAL_CREDIBILITY, 0.7, {"fd"});
+                fact_checker = new Node(HONEST, HONEST_NODE_INITIAL_BALANCE, INITIAL_CREDIBILITY, 0.7, checkers_expertise);
             }
         }
         else{
-            fact_checker = new Node(MALICIOUS, 100, INITIAL_CREDIBILITY, 0, {"fd"});
+            fact_checker = new Node(MALICIOUS, MALICIOUS_NODE_INITIAL_BALANCE, INITIAL_CREDIBILITY, 0, checkers_expertise);
         }
         node.push_back(fact_checker);
     }
@@ -104,16 +114,21 @@ int main(int argc, char* argv[]){
         while(node[check_requester]->balance < VERIFICATION_FEES && count--)	
             check_requester = randomNumberGenerator(0, n);
 
-        News* news_to_be_checked = new News(resultUsingProb(0.5, true) ? TRUE : FAKE, "dfsd", 10);
+        // generating news
+        int news_category_index = randomNumberGenerator(0, expertise.size());
+        string news_category = expertise[news_category_index];
+
+        News* news_to_be_checked = new News(resultUsingProb(0.5, true) ? TRUE : FAKE, news_category, VERIFICATION_FEES);
         node[check_requester]->balance -= VERIFICATION_FEES;
 
+        // incent for the voters
         double total_reward = 0;
         total_reward += VERIFICATION_FEES;
 
-        int number_of_fact_checkers = FACT_CHECKERS_PERECNTAGE * n;
+        // selecting fact checkers
+        int number_of_fact_checkers = FACT_CHECKERS_PERECNTAGE * (n-1);
         unordered_set <int> fact_checkers;
 
-        // selecting fact checkers
         while(fact_checkers.size() != number_of_fact_checkers){
             int num = randomNumberGenerator(0, n);
 
@@ -121,47 +136,118 @@ int main(int argc, char* argv[]){
                 fact_checkers.insert(num);
         }
 
-        double sum_credibility = 0;
+        // voting
+        unordered_map <int, NewsType> res;
+        int total_fact_checkers_balance = 0;
         double voters_result = 0;
-        vector<int> correct_voters;
+        double sum_credibility = 0;
 
-        // voting and updating credibility
         for(auto i: fact_checkers){
             Node* fact_checker = node[i];
-            NewsType res = resultUsingProb(fact_checker->prob, news_to_be_checked->news_type == TRUE) ? TRUE : FAKE;
+            NewsType temp_res = resultUsingProb(fact_checker->prob, news_to_be_checked->news_type == TRUE) ? TRUE : FAKE;
 
-            if(res == news_to_be_checked->news_type){
+            res[i] = temp_res;
+
+            // deciding result based on the credibility and balance of the voters
+            if(temp_res == TRUE){
+                voters_result += fact_checker->credibility + fact_checker->balance * POS_WEIGHT;
+            }
+
+            sum_credibility += fact_checker->credibility;
+
+            // expertise in the topic gets more credibility 
+            if(fact_checker->expertise == news_to_be_checked->news_category){
+                voters_result += EXPERTISE_MULTIPLIER * fact_checker->credibility;
+                sum_credibility += EXPERTISE_MULTIPLIER * fact_checker->credibility;
+            }
+
+            total_fact_checkers_balance += fact_checker->balance;
+
+            // voters putting deposists
+            fact_checker->balance -= AMOUNT_AT_STAKE;
+            total_reward += AMOUNT_AT_STAKE;
+        }
+
+        NewsType result_after_voting = (voters_result/(sum_credibility + POS_WEIGHT * total_fact_checkers_balance)) > 0.5 ? TRUE : FAKE;
+
+        // updating credibility 
+        vector<int> correct_voters;
+        for(auto i: fact_checkers){
+            Node* fact_checker = node[i];
+
+            if(res[i] == result_after_voting){
                 fact_checker->credibility += CREDIBILITY_INC_MULTIPLIER * (100 - fact_checker->credibility);
-                voters_result += fact_checker->credibility;
                 correct_voters.push_back(i);
             }
             else{
                 fact_checker->credibility -= CREDIBILITY_DEC_MULTIPLIER * fact_checker->credibility;
-                fact_checker->balance -= AMOUNT_AT_STAKE;
             }
 
-            sum_credibility += fact_checker->credibility;
         }
 
         // rewarding voters
         for(auto x: correct_voters){
-            node[x]->balance += total_reward / correct_voters.size();
+                node[x]->balance += total_reward / correct_voters.size();
         }
 
-        std::cout << std::fixed;
-        std::cout << std::setprecision(3);  
-        std::cout<<"News "<<t<<" which is created by node "<<check_requester<<" is actually: "<<((news_to_be_checked->news_type == TRUE) ? "TRUE" : "FAKE")<<endl;
-        std::cout<<"According to voters News "<<t<<" is: "<<((voters_result/sum_credibility)>0.5 ? ((news_to_be_checked->news_type == TRUE) ? "TRUE" : "FAKE") : ((news_to_be_checked->news_type == FAKE) ? "TRUE" : "FAKE"))<<endl<<endl;
+        std::cout<<"According to voters News "<<t<<" is: "<<result_after_voting<<endl;
+    }
+ 
+
+    std::cout<<"\n_______________________________________________________________________"<<endl;
+    std::cout<<"\t\tFINAL RESULTS"<<endl;
+    std::cout<<"_______________________________________________________________________\n"<<endl;
+
+    std::cout << std::fixed;
+    std::cout << std::setprecision(3);  
+    for(int i=0; i<n; i++){
+    	std::cout<<"Node "<<i<<" has a creadibility score of "<<node[i]->credibility<<" and a balance of "<<node[i]->balance<<endl;
     }
 
+    double honest_9_avg_balance = 0;
+    double honest_9_avg_credibility = 0;
 
-    cout<<"____________________________________________________________________________"<<endl;
-    cout<<"\t\tFINAL RESULTS"<<endl;
-    cout<<"____________________________________________________________________________"<<endl;
+    double honest_7_avg_balance = 0;
+    double honest_7_avg_credibility = 0;
+
+    double malicious_avg_balance = 0;
+    double malicious_avg_credibility = 0;
+
 
     for(int i=0; i<n; i++){
-    	cout<<"Node "<<i<<" has a creadibility score of "<<node[i]->credibility<<" and a balance of "<<node[i]->balance<<endl;
+        Node* fact_checker = node[i];
+
+        if(i < (1-q)*n){
+            if(i < (1-q)*p*n){
+                honest_9_avg_balance += fact_checker->balance;
+                honest_9_avg_credibility += fact_checker->credibility;
+            }
+            else{
+                honest_7_avg_balance += fact_checker->balance;
+                honest_7_avg_credibility += fact_checker->credibility;
+            }
+        }
+        else{
+            malicious_avg_balance += fact_checker->balance;
+            malicious_avg_credibility += fact_checker->credibility;
+        }
     }
+    
+    honest_9_avg_balance /= (1-q)*p*n;
+    honest_9_avg_credibility /= (1-q)*p*n;
+
+    // cout<<q<<" "<<p<<" "<<n<<endl;
+    // cout<<(1-q)*p*n<<endl;
+    
+    honest_7_avg_balance /= (1-q)*(1-p)*n;
+    honest_7_avg_credibility /= (1-q)*(1-p)*n;
+
+    malicious_avg_balance /= q*n; 
+    malicious_avg_credibility /= q*n; 
+
+    cout<<"Honest Nodes with 0.9 prob <===> "<<"avg balance = "<<honest_9_avg_balance<<"\t"<<"avg credibility = "<<honest_9_avg_credibility<<endl;
+    cout<<"Honest Nodes with 0.7 prob <===> "<<"avg balance = "<<honest_7_avg_balance<<"\t"<<"avg credibility = "<<honest_7_avg_credibility<<endl;
+    cout<<"Malicious nodes <===> "<<"avg balance = "<<malicious_avg_balance<<"\t"<<"avg credibility = "<<malicious_avg_credibility<<endl;
 
     return 0;
 }
