@@ -13,8 +13,11 @@ using namespace std;
 #define HONEST_NODE_INITIAL_BALANCE 100
 #define MALICIOUS_NODE_INITIAL_BALANCE 15
 
-#define NUMBER_OF_REQUESTS 2000
+#define NUMBER_OF_REQUESTS 1000
 #define FACT_CHECKERS_PERECNTAGE 0.5
+
+#define PROB_TRUSTWORTHY_HONEST 0.9
+#define PROB_LESS_TRUSTWORTHY_HONEST 0.7
 
 #define VERIFICATION_FEES 0.5
 #define AMOUNT_AT_STAKE 0.02
@@ -80,12 +83,21 @@ bool resultUsingProb(double prob, bool res){
 int main(int argc, char* argv[]){
     vector<Node *> node;
     vector<string> expertise = {"ML", "Systems", "Theory", "Sports", "Politics"};
-    int n;
+    int n, m, I;
     double p, q;
+
+    if (argc != 5) {
+        std::cout << "Usage: ./a.out <total nodes> <fraction of malicious> <fraction of more trustworthy honest nodes> <% wealth with malicious>" << endl;
+        return 1;
+    }
 
     n = atoi(argv[1]);
     q = atof(argv[2]);
     p = atof(argv[3]);
+    m = atoi(argv[4]);
+
+    float mal = (float) (m * (1 - q) * HONEST_NODE_INITIAL_BALANCE * n)/(float) (HONEST_NODE_INITIAL_BALANCE * q * n - m * q * n);
+    I = floor(mal);
 
     for(int i=0; i<n; i++){
         Node* fact_checker;
@@ -94,14 +106,17 @@ int main(int argc, char* argv[]){
 
         if(i < (1-q)*n){
             if(i < (1-q)*p*n){
-                fact_checker = new Node(HONEST, HONEST_NODE_INITIAL_BALANCE, INITIAL_CREDIBILITY, 0.9, checkers_expertise);
+                // Trustworthly honest nodes
+                fact_checker = new Node(HONEST, HONEST_NODE_INITIAL_BALANCE, INITIAL_CREDIBILITY, PROB_TRUSTWORTHY_HONEST, checkers_expertise);
             }
             else{
-                fact_checker = new Node(HONEST, HONEST_NODE_INITIAL_BALANCE, INITIAL_CREDIBILITY, 0.7, checkers_expertise);
+                // less trustworthy honest nodes
+                fact_checker = new Node(HONEST, HONEST_NODE_INITIAL_BALANCE, INITIAL_CREDIBILITY, PROB_LESS_TRUSTWORTHY_HONEST, checkers_expertise);
             }
         }
         else{
-            fact_checker = new Node(MALICIOUS, MALICIOUS_NODE_INITIAL_BALANCE, INITIAL_CREDIBILITY, 0, checkers_expertise);
+            // malicious nodes
+            fact_checker = new Node(MALICIOUS, I, INITIAL_CREDIBILITY, 0, checkers_expertise);
         }
         node.push_back(fact_checker);
     }
@@ -235,9 +250,6 @@ int main(int argc, char* argv[]){
     
     honest_9_avg_balance /= (1-q)*p*n;
     honest_9_avg_credibility /= (1-q)*p*n;
-
-    // cout<<q<<" "<<p<<" "<<n<<endl;
-    // cout<<(1-q)*p*n<<endl;
     
     honest_7_avg_balance /= (1-q)*(1-p)*n;
     honest_7_avg_credibility /= (1-q)*(1-p)*n;
@@ -245,9 +257,9 @@ int main(int argc, char* argv[]){
     malicious_avg_balance /= q*n; 
     malicious_avg_credibility /= q*n; 
 
-    cout<<"Honest Nodes with 0.9 prob <===> "<<"avg balance = "<<honest_9_avg_balance<<"\t"<<"avg credibility = "<<honest_9_avg_credibility<<endl;
-    cout<<"Honest Nodes with 0.7 prob <===> "<<"avg balance = "<<honest_7_avg_balance<<"\t"<<"avg credibility = "<<honest_7_avg_credibility<<endl;
-    cout<<"Malicious nodes <===> "<<"avg balance = "<<malicious_avg_balance<<"\t"<<"avg credibility = "<<malicious_avg_credibility<<endl;
+    std::cout<<"Honest Nodes with 0.9 prob <===> "<<"avg balance = "<<honest_9_avg_balance<<"\t"<<"avg credibility = "<<honest_9_avg_credibility<<endl;
+    std::cout<<"Honest Nodes with 0.7 prob <===> "<<"avg balance = "<<honest_7_avg_balance<<"\t"<<"avg credibility = "<<honest_7_avg_credibility<<endl;
+    std::cout<<"Malicious nodes <===> "<<"avg balance = "<<malicious_avg_balance<<"\t"<<"avg credibility = "<<malicious_avg_credibility<<endl;
 
     return 0;
 }
