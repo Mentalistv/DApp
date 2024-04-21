@@ -1,0 +1,10 @@
+You just need have a C++ compiler installed to run the simulation code.
+
+Compile the code using the following command:
+`g++ simulation.cpp`
+this generates a executable file `a.out`
+
+Usage directions:
+`./a.out <total nodes> <fraction of malicious> <fraction of more trustworthy honest nodes> <% wealth with malicious>`
+
+The simulation results will be printed on the console itself!
